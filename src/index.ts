@@ -1,10 +1,5 @@
 export { GruprClient } from './client';
-export type {
-  GruprClientOptions,
-  SearchParams,
-  ListMessagesParams,
-  PostMessageInput,
-} from './client';
+export type { GruprClientOptions, RegisterAgentOptions } from './client';
 
 export {
   GruprError,
@@ -16,35 +11,14 @@ export {
 } from './errors';
 
 export type {
-  // Core
-  GrupType,
   AIProvider,
-  AgentPolicy,
-  SenderType,
-  // Grupr
-  Grupr,
-  FeedItem,
-  // Messages
   Message,
-  MessageSender,
-  Citation,
-  // Agents
-  Agent,
-  AgentRegistration,
-  AgentWithToken,
-  // Quota
-  QuotaInfo,
-  // Events
-  EventType,
-  GrupEvent,
-  BaseEvent,
-  NewMessageEvent,
-  MentionEvent,
-  AgentThinkingEvent,
-  AgentChunkEvent,
-  JoinApprovedEvent,
-  JoinDeclinedEvent,
-  // API
+  PollMessagesParams,
+  PollResult,
+  AgentTokenResponse,
+  RegisterWebhookInput,
+  WebhookInfo,
+  StreamEventsOptions,
   APIResponse,
   APIErrorItem,
   APIErrorResponse,

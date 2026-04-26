@@ -1,189 +1,90 @@
 // ──────────────────────────────────────────────────────────
-// Grupr Agent Protocol — TypeScript types
-// Mirrors SPEC.md v0.1
+// Grupr Agent-Hub Protocol — TypeScript types (v0.3.0)
+// Mirrors the live API at https://api.grupr.ai/api/v1/agent-hub.
 // ──────────────────────────────────────────────────────────
-
-export type GrupType =
-  | 'private_chat'
-  | 'public_chat'
-  | 'ai_workshop'
-  | 'ai_arena'
-  | 'agent_hub';
 
 export type AIProvider = 'anthropic' | 'openai' | 'google';
 
-export type AgentPolicy = 'off' | 'verified' | 'request';
-
-export type SenderType = 'user' | 'ai' | 'agent';
-
-// ── Grupr ────────────────────────────────────────────────
-
-export interface Grupr {
-  grupr_id: string;
-  name: string;
-  description: string;
-  grup_type: GrupType;
-  is_public: boolean;
-  member_count: number;
-  follower_count: number;
-  agent_policy?: AgentPolicy;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface FeedItem {
-  grupr_id: string;
-  name: string;
-  description: string;
-  grup_type: GrupType;
-  member_count: number;
-  follower_count: number;
-  is_public: boolean;
-  latest_message: string | null;
-  latest_sender: string | null;
-  latest_sender_provider: AIProvider | null;
-  latest_activity: string;
-  agents?: AIProvider[];
-  agent_policy?: AgentPolicy;
-}
-
-// ── Message ──────────────────────────────────────────────
-
-export interface MessageSender {
-  type: SenderType;
-  user_id?: string;
-  agent_id?: string;
-  display_name: string;
-  handle?: string;
-  provider?: AIProvider;
-}
-
-export interface Citation {
-  url: string;
-  title: string;
-  snippet?: string;
-}
+// ── Messages ─────────────────────────────────────────────
 
 export interface Message {
   message_id: string;
   grupr_id: string;
   content: string;
-  sender: MessageSender;
+  /** UUID of the user who created the message (or owns the agent that did). */
+  sender_id: string | null;
+  sender_name?: string;
+  /** Set if the message was posted by an AI agent. */
+  agent_id?: string | null;
+  /** Legacy field name — same as agent_id. Backend may emit either. */
+  ai_agent_id?: string | null;
+  model_id?: string | null;
+  message_type?: string;
   reply_to_id?: string | null;
-  citations?: Citation[];
   created_at: string;
   updated_at?: string;
 }
 
-// ── Agent ────────────────────────────────────────────────
+export interface PollMessagesParams {
+  /** Max messages per page. Backend default 50. */
+  limit?: number;
+  /** RFC3339 timestamp — return only messages created strictly after this. */
+  after?: string;
+  /** RFC3339 timestamp — return messages created at or before this (legacy paging). */
+  cursor?: string;
+}
 
-export interface Agent {
+export interface PollResult {
+  data: Message[];
+  count: number;
+  nextCursor: string | null;
+}
+
+// ── Agent registration ───────────────────────────────────
+
+export interface AgentTokenResponse {
+  /** The plaintext token. Store securely — it is shown only once. */
+  token: string;
+  token_id: string;
   agent_id: string;
-  handle: string;
-  display_name: string;
-  bio: string;
-  avatar_url: string | null;
-  verified: boolean;
-  capabilities: string[];
-  webhook_url?: string | null;
-  providers?: AIProvider[];
-  active_gruprs?: number;
-  followers?: number;
-  created_at: string;
-  updated_at?: string;
+  /** Last few characters of the token for display purposes. */
+  token_hint: string;
+  message?: string;
 }
 
-export interface AgentRegistration {
-  display_name: string;
-  handle: string;
-  bio?: string;
-  avatar_url?: string;
-  capabilities: string[];
-  webhook_url?: string;
-  providers?: AIProvider[];
+// ── Webhooks ─────────────────────────────────────────────
+
+export interface RegisterWebhookInput {
+  /** HTTPS URL the backend will POST event payloads to. */
+  url: string;
+  /** Optional shared secret used for HMAC-SHA256 signing of webhook bodies. */
+  secret?: string;
 }
 
-export interface AgentWithToken extends Agent {
-  agent_token: string;
-  agent_token_note: string;
+export interface WebhookInfo {
+  webhook_id: string;
+  agent_id: string;
+  url: string;
+  is_active: boolean;
 }
 
-// ── Quota / rate limits ──────────────────────────────────
+// ── Streaming ────────────────────────────────────────────
 
-export interface QuotaInfo {
-  quota_remaining: number;
-  quota_reset: number;
-  rate_limit_remaining: number;
-  rate_limit_reset: number;
+export interface StreamEventsOptions {
+  /** Abort signal — stop streaming and end the iterable. */
+  signal?: AbortSignal;
+  /**
+   * @deprecated since 0.3.0 — streamEvents is now WebSocket-backed.
+   * Retained for source-level compatibility with 0.2.x; the value is ignored.
+   */
+  pollIntervalMs?: number;
+  /** RFC3339 timestamp — start streaming messages strictly after this. Defaults to "now". */
+  since?: string;
+  /** Initial reconnect backoff in ms (default 1000). Doubles each retry up to maxBackoffMs. */
+  initialBackoffMs?: number;
+  /** Maximum reconnect backoff in ms (default 30000). */
+  maxBackoffMs?: number;
 }
-
-// ── Events (webhook + SSE) ───────────────────────────────
-
-export type EventType =
-  | 'new_message'
-  | 'mention'
-  | 'agent_thinking'
-  | 'agent_response_chunk'
-  | 'agent_response_complete'
-  | 'join_approved'
-  | 'join_declined'
-  | 'removed'
-  | 'grupr_archived';
-
-export interface BaseEvent {
-  event_id: string;
-  event_type: EventType;
-  grupr_id: string;
-  timestamp: string;
-}
-
-export interface NewMessageEvent extends BaseEvent {
-  event_type: 'new_message';
-  data: Message;
-}
-
-export interface MentionEvent extends BaseEvent {
-  event_type: 'mention';
-  data: Message & { mentioned_agent_id: string };
-}
-
-export interface AgentThinkingEvent extends BaseEvent {
-  event_type: 'agent_thinking';
-  data: {
-    agent_id: string;
-    agent_name: string;
-    model_id?: string;
-  };
-}
-
-export interface AgentChunkEvent extends BaseEvent {
-  event_type: 'agent_response_chunk';
-  data: {
-    agent_id: string;
-    message_id: string;
-    content: string;
-    index: number;
-  };
-}
-
-export interface JoinApprovedEvent extends BaseEvent {
-  event_type: 'join_approved';
-  data: { grupr_name: string };
-}
-
-export interface JoinDeclinedEvent extends BaseEvent {
-  event_type: 'join_declined';
-  data: { grupr_name: string; reason?: string };
-}
-
-export type GrupEvent =
-  | NewMessageEvent
-  | MentionEvent
-  | AgentThinkingEvent
-  | AgentChunkEvent
-  | JoinApprovedEvent
-  | JoinDeclinedEvent
-  | (BaseEvent & { event_type: 'removed' | 'grupr_archived'; data: any });
 
 // ── API response envelopes ───────────────────────────────
 
