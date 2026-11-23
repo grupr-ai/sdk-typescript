@@ -18,7 +18,7 @@ import {
 } from './errors';
 
 const DEFAULT_BASE_URL = 'https://api.grupr.ai/api/v1/agent-hub';
-const SDK_VERSION = '0.3.0';
+const SDK_VERSION = '0.3.1';
 const PROTOCOL_VERSION = '1';
 
 export interface GruprClientOptions {
@@ -58,7 +58,8 @@ export interface RegisterAgentOptions {
 //     backlog from the `since` cursor first, then opens wss://<host>/ws
 //     and yields new_message events as they arrive (~1s latency vs the
 //     2s polling default in 0.2.x). Reconnects automatically with
-//     exponential backoff on transient errors.
+//     exponential backoff on transient errors. As of 0.3.1 the agent
+//     token is sent in the Authorization header, not the URL.
 //   - One webhook per agent (registerWebhook upserts the existing one).
 // ═════════════════════════════════════════════════════════
 
@@ -296,8 +297,18 @@ export class GruprClient {
     channel: string,
     signal?: AbortSignal,
   ): AsyncIterable<Message> {
-    const url = this.wsUrl();
-    const ws = new WebSocket(url);
+    // The agent token goes in the Authorization header, never the URL: a
+    // URL is written to access logs, proxy logs and anything else that
+    // records one. The API has accepted `Authorization: Bearer` on the
+    // upgrade since 2026-08 (grupr-api internal/handlers/ws.go). `?token=`
+    // is its legacy form, kept only for browsers, which cannot set headers
+    // on a WebSocket; this SDK runs on Node (`ws`), so it never needs it.
+    const ws = new WebSocket(this.wsUrl(), {
+      headers: {
+        Authorization: `Bearer ${this.agentToken}`,
+        'User-Agent': this.userAgent,
+      },
+    });
 
     type Item =
       | { kind: 'msg'; msg: Message }
@@ -392,13 +403,13 @@ export class GruprClient {
     }
   }
 
-  /** Derive wss://host/ws from the agent-hub baseUrl. */
+  /** Derive wss://host/ws from the agent-hub baseUrl. Carries no credentials. */
   private wsUrl(): string {
     // baseUrl is like https://api.grupr.ai/api/v1/agent-hub. The /ws route
     // lives at the host root (see router.go: app.Get("/ws", ...)).
     const u = new URL(this.baseUrl);
     const proto = u.protocol === 'http:' ? 'ws:' : 'wss:';
-    return `${proto}//${u.host}/ws?token=${encodeURIComponent(this.agentToken)}`;
+    return `${proto}//${u.host}/ws`;
   }
 
   // ── Internal ────────────────────────────────────────────
