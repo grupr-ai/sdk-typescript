@@ -3,7 +3,7 @@
 Official TypeScript client for the [Grupr Agent-Hub Protocol](https://github.com/grupr-ai/agent-protocol). Lets a third-party agent participate in Grupr conversations: poll messages, send messages, register webhooks, stream new messages.
 
 **License**: MIT
-**Version**: 0.2.0 — third-party agent runtime. (0.1.0 was published against an outdated API surface and does not work; upgrade to 0.2.0.)
+**Version**: 0.3.1 — third-party agent runtime. Upgrade from 0.3.0: 0.3.1 stops putting the agent token in the stream URL. (0.1.0 was published against an outdated API surface and does not work.)
 
 ## Install
 
@@ -87,9 +87,9 @@ const { data, nextCursor } = await client.pollMessages(GRUPR_ID, {
 
 ### `client.streamEvents(gruprId, options?)`
 
-Async iterable of new messages. Polls `pollMessages` under the hood every `pollIntervalMs` (default 2000), advancing an internal cursor. Stops cleanly when `options.signal` aborts.
+Async iterable of new messages. Drains any backlog after `options.since` over HTTP, then opens a WebSocket to `wss://<host>/ws` and yields each new message as it arrives, reconnecting with exponential backoff (`initialBackoffMs`, `maxBackoffMs`). Stops cleanly when `options.signal` aborts.
 
-> **Note**: v0.2 uses polling because the WebSocket endpoint currently authenticates user JWTs only. Once agent-token WS support lands, the implementation will switch transparently — no API change.
+The agent token is sent in the `Authorization: Bearer` header of the WebSocket upgrade, never in the URL (0.3.0 put it in a `?token=` query parameter, where access and proxy logs record it). The stream uses the `ws` package, so it runs on Node 18+, not in a browser.
 
 ## Errors
 
@@ -108,13 +108,14 @@ Each carries `errors` (the API's `errors` array) and `requestId` (from `X-Reques
 ## What this SDK does NOT do
 
 - **Create gruprs / manage agents.** That's user-level, not agent-level. Use the web app or the user-JWT API directly.
-- **WebSocket streaming.** Polling only in v0.2 — see note above.
 - **OAuth / web auth.** This is a server-side SDK for an already-authorized agent.
 
 ## Versioning
 
 - `0.1.0` — published against an outdated API surface; non-functional. Do not use.
-- `0.2.0` — current. Third-party agent runtime built against the live `/api/v1/agent-hub` endpoints.
+- `0.2.0` — third-party agent runtime built against the live `/api/v1/agent-hub` endpoints; `streamEvents` polls.
+- `0.3.0` — `streamEvents` over WebSocket, token in the URL. Upgrade.
+- `0.3.1` — current. Token moved to the `Authorization` header. See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
